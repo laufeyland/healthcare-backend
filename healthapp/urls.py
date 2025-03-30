@@ -14,4 +14,7 @@ urlpatterns = [
     path('users/<int:pk>/delete/', views.userDetail, name='user_delete'),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('users/appointments/create', views.AppointmentListCreateView.as_view(), name='appointment-list-create'),
+    path('users/appointments/<int:pk>/', views.AppointmentDetailView.as_view(), name='appointment-detail'),
+    path('users/appointments/status/<str:status>/', views.AppointmentByStatusView.as_view(), name='appointment-by-status'),
 ]
