@@ -11,13 +11,13 @@ class UserSerializer(serializers.ModelSerializer):
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
-        validated_data.pop('role', None)  # Remove role from validated_data if it exists
-        validated_data.pop('premium_status', None)  # Remove premium_status from validated_data if it exists
+        validated_data.pop('role', None)  
+        validated_data.pop('premium_status', None)  
         password = validated_data.pop('password')
         user = User(**validated_data)
-        user.set_password(password)  # Hash password
+        user.set_password(password)  
         user.save()
-        return user  # Return the user instance
+        return user  
 
     
 class AppointmentSerializer(serializers.ModelSerializer):

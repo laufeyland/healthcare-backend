@@ -74,9 +74,8 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
                 raise serializers.ValidationError(
                     {"error": "You already have a pending or confirmed appointment."}
                 )
-
-            # Save the new appointment
             serializer.save(user=user)
+
 # Retrieve, Update, Delete a Specific Appointment
 class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AppointmentSerializer
