@@ -7,17 +7,31 @@ from rest_framework_simplejwt.views import (
 )
 
 urlpatterns = [
-    path('users/', views.UserListView.as_view(), name='get_users'),
     path('users/create/', views.UserListCreateView.as_view(), name='create_user'),
-    # for admin
-    path('users/<int:pk>/', views.UserDetailView.as_view(), name='user_detail'),
-    path('users/<int:pk>/update/', views.UserDetailView.as_view(), name='user_update'),
-    path('users/<int:pk>/delete/', views.UserDetailView.as_view(), name='user_delete'),
-    # for authenticated user
-    path('users/me/', views.AccountView.as_view(), name='account'),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # for admin
+    path('users/', views.UserListView.as_view(), name='get_users'),
+    path('admin/<int:pk>/', views.UserDetailView.as_view(), name='user_detail'),
+    path('admin/appointments/', views.AppointmentsView.as_view(), name='appointments-list'),
+    path('admin/appointments/<int:pk>/', views.AppointmentEditView.as_view(), name='appointment-detail-admin'),
+    path('admin/appointments/status/<str:status>/', views.AppointmentsStatusView.as_view(), name='appointment-by-status-admin'),
+    path('admin/premium/', views.PremiumSubscriptionView.as_view(), name='premium-subscription-list'),
+    path('admin/premium/list', views.PremiumSubscriptionListView.as_view(), name='premium-subscription-detail'),
+    path('admin/premium/<int:pk>/revoke/', views.RevokePremiumView.as_view(), name='revoke-premium-subscription'),
+    path('admin/coupons/create/', views.CouponCreateView.as_view(), name='coupon-list-create'),
+    path('admin/coupons/', views.CouponListView.as_view(), name='coupon-list'),
+    path('admin/coupons/<int:pk>/', views.CouponEditView.as_view(), name='coupon-detail'),
+    path('admin/history/', views.MedicalHistoryAdminView.as_view(), name='medical-history-list-admin'),
+    path('admin/history/<int:pk>/', views.MedicalHistoryDetailView.as_view(), name='medical-history-detail-admin'),
+    path('admin/history/user/<int:pk>/', views.MedicalHistoryByUserView.as_view(), name='medical-history-filter-by-user'),
+    path('admin/upload', views.MedicalRecordUploadView.as_view(), name='upload-medical-history-record'),
+    # for authenticated user
+    path('users/me/', views.AccountView.as_view(), name='account'),
     path('users/appointments/create', views.AppointmentListCreateView.as_view(), name='appointment-list-create'),
     path('users/appointments/<int:pk>/', views.AppointmentDetailView.as_view(), name='appointment-detail'),
     path('users/appointments/status/<str:status>/', views.AppointmentByStatusView.as_view(), name='appointment-by-status'),
+    path('users/redeem/', views.RedeemCouponView.as_view(), name='redeem-coupon'),
+    path('users/history/', views.MedicalHistoryView.as_view(), name='medical-history'),
+
 ]

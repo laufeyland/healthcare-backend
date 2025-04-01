@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils.timezone import now, timedelta
 
 # Enums for status fields
 class Role(models.TextChoices):
@@ -11,6 +12,8 @@ class AppointmentStatus(models.TextChoices):
     PENDING = 'pending'
     CONFIRMED = 'confirmed'
     CANCELLED = 'cancelled'
+    MISSED = 'missed'
+    COMPLETED = 'completed'
 
 class ReportStatus(models.TextChoices):
     PENDING = 'pending'
@@ -30,6 +33,7 @@ class CustomUser(AbstractUser):
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.USER)
     settings = models.JSONField(default=dict, blank=True)
     premium_status = models.BooleanField(default=False)
+    ai_tries = models.PositiveIntegerField(default=0)
     def __str__(self):
         return self.username
 
@@ -43,7 +47,8 @@ class Appointment(models.Model):
 class MedicalHistory(models.Model):
     patient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='medical_histories')
     scan = models.ImageField(upload_to='scans/')
-    ai_interpretation = models.TextField()
+    ai_interpretation = models.TextField(blank=True, null=True)
+    appointment_id = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True)
     record_date = models.DateTimeField(auto_now_add=True)
 
 # Report Model
@@ -61,12 +66,23 @@ class AIModel(models.Model):
     parameters = models.JSONField(default=dict, blank=True)
 
 # Premium Subscription Model
+def default_expiry():
+    return now() + timedelta(days=30)
+
 class PremiumSubscription(models.Model):
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='premium_subscription')
-    premium_expiry = models.DateTimeField()
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    expires_at = models.DateTimeField(default=default_expiry)  # Use a named function
+
+    def has_expired(self):
+        return now() >= self.expires_at
 
 # Coupon Model
+def default_coupon_expiry():
+    return now() + timedelta(days=7)
 class Coupon(models.Model):
-    coupon_code = models.CharField(max_length=50, unique=True)
-    valid_until = models.DateTimeField()
+    coupon_code = models.CharField(max_length=6, unique=True)
+    valid_until = models.DateTimeField(default=default_coupon_expiry)
     description = models.TextField(blank=True, null=True)
+
+    def has_expired(self):
+        return now() >= self.expires_at

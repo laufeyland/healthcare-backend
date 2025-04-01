@@ -7,10 +7,11 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'password', 'name', 'age', 'gender', 'role', 'settings', 'premium_status')
+        fields = ('id', 'username', 'email', 'password', 'name', 'age', 'gender', 'role', 'settings', 'premium_status', 'ai_tries')
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
+        validated_data.pop('ai_tries', None)
         validated_data.pop('role', None)  
         validated_data.pop('premium_status', None)  
         password = validated_data.pop('password')
@@ -29,7 +30,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
 class MedicalHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = MedicalHistory
-        fields = ['id', 'patient', 'scan', 'ai_interpretation', 'record_date']
+        fields = ['id', 'patient', 'scan', 'ai_interpretation', 'appointment_id', 'record_date']
 
 class ReportSerializer(serializers.ModelSerializer):
     class Meta:
@@ -44,7 +45,7 @@ class AIModelSerializer(serializers.ModelSerializer):
 class PremiumSubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PremiumSubscription
-        fields = ['id', 'user', 'premium_expiry']
+        fields = ['id', 'user_id', 'expires_at']
 
 class CouponSerializer(serializers.ModelSerializer):
     class Meta:
