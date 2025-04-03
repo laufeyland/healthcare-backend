@@ -39,7 +39,7 @@ def check_and_generate_coupons():
             new_coupons = [
                 Coupon(
                     coupon_code=generate_coupon_code(),
-                    valid_until=now() + timedelta(seconds=8),
+                    valid_until=now() + timedelta(days=7),
                     description="Automatically added coupon"
                 )
                 for _ in range(10)

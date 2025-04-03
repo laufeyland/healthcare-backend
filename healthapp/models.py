@@ -13,6 +13,7 @@ class AppointmentStatus(models.TextChoices):
     CONFIRMED = 'confirmed'
     CANCELLED = 'cancelled'
     MISSED = 'missed'
+    FINISHED = 'finished'
     COMPLETED = 'completed'
 
 class ReportStatus(models.TextChoices):
@@ -21,7 +22,6 @@ class ReportStatus(models.TextChoices):
     COMPLETED = 'completed'
 
 class AIModelStatus(models.TextChoices):
-    TRAINING = 'training'
     DEPLOYED = 'deployed'
     ARCHIVED = 'archived'
 
@@ -45,10 +45,10 @@ class Appointment(models.Model):
 
 # Medical History Model
 class MedicalHistory(models.Model):
-    patient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='medical_histories')
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='medical_histories')
     scan = models.ImageField(upload_to='scans/')
     ai_interpretation = models.TextField(blank=True, null=True)
-    appointment_id = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True)
+    appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True)
     record_date = models.DateTimeField(auto_now_add=True)
 
 # Report Model
@@ -61,8 +61,9 @@ class Report(models.Model):
 # AI Model
 class AIModel(models.Model):
     model_name = models.CharField(max_length=255)
-    version = models.CharField(max_length=50)
-    status = models.CharField(max_length=10, choices=AIModelStatus.choices, default=AIModelStatus.TRAINING)
+    model_file = models.FileField(upload_to='models/')
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=AIModelStatus.choices, default=AIModelStatus.DEPLOYED)
     parameters = models.JSONField(default=dict, blank=True)
 
 # Premium Subscription Model

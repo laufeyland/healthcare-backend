@@ -8,7 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'password', 'name', 'age', 'gender', 'role', 'settings', 'premium_status', 'ai_tries')
-        extra_kwargs = {'password': {'write_only': True}}
+        extra_kwargs = {'password': {'write_only': True}, 'email' : {'required': True, 'allow_blank': False}, 'username': {'required': True, 'allow_blank': False}, 'role': {'read_only': True}, 'premium_status': {'read_only': True},}
 
     def create(self, validated_data):
         validated_data.pop('ai_tries', None)
@@ -30,7 +30,8 @@ class AppointmentSerializer(serializers.ModelSerializer):
 class MedicalHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = MedicalHistory
-        fields = ['id', 'patient', 'scan', 'ai_interpretation', 'appointment_id', 'record_date']
+        fields = ['id', 'user', 'scan', 'ai_interpretation', 'appointment', 'record_date']
+        extra_kwargs = {'user': {'read_only': True}}
 
 class ReportSerializer(serializers.ModelSerializer):
     class Meta:
@@ -40,7 +41,8 @@ class ReportSerializer(serializers.ModelSerializer):
 class AIModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = AIModel
-        fields = ['id', 'model_name', 'version', 'status', 'parameters']
+        fields = ['id', 'model_name', 'model_file', 'created_at', 'status', 'parameters']
+        extra_kwargs = {'model_file': {'write_only': True}}
 
 class PremiumSubscriptionSerializer(serializers.ModelSerializer):
     class Meta:

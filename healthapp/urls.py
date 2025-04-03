@@ -11,7 +11,7 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     # for admin
-    path('users/', views.UserListView.as_view(), name='get_users'),
+    path('admin/users/', views.UserListView.as_view(), name='get_users'),
     path('admin/<int:pk>/', views.UserDetailView.as_view(), name='user_detail'),
     path('admin/appointments/', views.AppointmentsView.as_view(), name='appointments-list'),
     path('admin/appointments/<int:pk>/', views.AppointmentEditView.as_view(), name='appointment-detail-admin'),
@@ -25,13 +25,20 @@ urlpatterns = [
     path('admin/history/', views.MedicalHistoryAdminView.as_view(), name='medical-history-list-admin'),
     path('admin/history/<int:pk>/', views.MedicalHistoryDetailView.as_view(), name='medical-history-detail-admin'),
     path('admin/history/user/<int:pk>/', views.MedicalHistoryByUserView.as_view(), name='medical-history-filter-by-user'),
-    path('admin/upload', views.MedicalRecordUploadView.as_view(), name='upload-medical-history-record'),
+    path('admin/history/upload', views.MedicalRecordUploadView.as_view(), name='upload-medical-history-record'),
+    path('admin/ai/', views.AIModelListView.as_view(), name='ai-model-list'),
+    path('admin/ai/<int:pk>/', views.AIModelDetailView.as_view(), name='ai-model-detail'),
+    path('admin/ai/upload/', views.AIModelCreateView.as_view(), name='upload-ai-model'),
+    
     # for authenticated user
     path('users/me/', views.AccountView.as_view(), name='account'),
+    path('users/appointments/', views.AppointmentListView.as_view(), name='appointment-list'),
     path('users/appointments/create', views.AppointmentListCreateView.as_view(), name='appointment-list-create'),
     path('users/appointments/<int:pk>/', views.AppointmentDetailView.as_view(), name='appointment-detail'),
     path('users/appointments/status/<str:status>/', views.AppointmentByStatusView.as_view(), name='appointment-by-status'),
     path('users/redeem/', views.RedeemCouponView.as_view(), name='redeem-coupon'),
     path('users/history/', views.MedicalHistoryView.as_view(), name='medical-history'),
+    path('users/ai/', views.DeployedAIModelView.as_view(), name='view-ai-models-user'),
+    path('users/ai/infer', views.AiInferenceView.as_view(), name='ai-inference'),
 
 ]

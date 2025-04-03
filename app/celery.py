@@ -18,10 +18,10 @@ app.autodiscover_tasks()
 app.conf.beat_schedule = {
     'remove-expired-premium-users': {
         'task': 'healthapp.tasks.remove_expired_premium_users',
-        'schedule': crontab(hour=0, minute=0),  # Runs at midnight
+        'schedule': timedelta(hours=1),  
     },
     'check_and_generate_coupons': {
         'task': 'healthapp.tasks.check_and_generate_coupons',
-        'schedule': timedelta(seconds=10),  # Runs every 5 minutes
+        'schedule': timedelta(seconds=10),  
     },
 }

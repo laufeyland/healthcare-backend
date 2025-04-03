@@ -1,17 +1,15 @@
-from django.shortcuts import get_object_or_404, render
-from rest_framework.decorators import api_view, permission_classes
+from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework import status, generics
 from .models import *
 from .serializers import *
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils.timezone import now
 from django.db import transaction
 from .permissions import *
-import logging
+from .ai_inference import ai_infer
 
-logger = logging.getLogger(__name__)
 # Create your views here.
 
 # List and Create Users
@@ -46,7 +44,8 @@ class AccountView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, IsUser | IsPatient]
     def get_object(self):
         return self.request.user
-   
+
+#Create Appointments for Authenticated User
 class AppointmentListCreateView(generics.ListCreateAPIView):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
@@ -59,19 +58,23 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
 
         # Using a transaction to lock rows and prevent race conditions
         with transaction.atomic():
-            existing_appointments = Appointment.objects.select_for_update().filter(
+            existing_appointments = Appointment.objects.filter(
                 user_id=self.request.user.id,
                 appointment_date__gte=now(),
                 status__in=['Pending', 'Confirmed']
             )
-
-            logger.debug(f"Checking for existing appointments for user {user}: {existing_appointments}")
-
             if existing_appointments.exists():
                 raise serializers.ValidationError(
                     {"error": "You already have a pending or confirmed appointment."}
                 )
             serializer.save(user=user)
+# List Appointments for Authenticated User
+class AppointmentListView(generics.ListAPIView):
+    serializer_class = AppointmentSerializer
+    permission_classes = [IsAuthenticated, IsUser | IsPatient]
+
+    def get_queryset(self):
+        return Appointment.objects.filter(user=self.request.user).order_by('appointment_date')
 
 # Retrieve, Update, Delete a Specific Appointment by User
 class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -228,14 +231,12 @@ class RedeemCouponView(generics.CreateAPIView):
         if not coupon_code:
             raise serializers.ValidationError({"error": "Coupon code is required."})
 
-        # Check if the coupon exists
-        coupon = get_object_or_404(Coupon, coupon_code=coupon_code)
-
         # see if the user already has a premium subscription
         existing_subscription = PremiumSubscription.objects.filter(user=user).first()
         if existing_subscription and not existing_subscription.has_expired():
             raise serializers.ValidationError({"error": "User is already premium."})
-
+        else:
+            coupon = get_object_or_404(Coupon, coupon_code=coupon_code)
 
         user.ai_tries += 5
         user.premium_status = True
@@ -252,10 +253,10 @@ class MedicalHistoryView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsUser]
 
     def get_queryset(self):
-        return MedicalHistory.objects.filter(patient=self.request.user).order_by('-record_date')
+        return MedicalHistory.objects.filter(user=self.request.user).order_by('-record_date')
 
     def perform_create(self, serializer):
-        serializer.save(patient=self.request.user)
+        serializer.save(user=self.request.user)
 
 # Medical History View for Admin
 class MedicalHistoryAdminView(generics.ListAPIView):
@@ -276,7 +277,7 @@ class MedicalHistoryByUserView(generics.ListAPIView):
 
     def get_queryset(self):
         user_id = self.kwargs.get('user_id')
-        return MedicalHistory.objects.filter(patient_id=user_id).order_by('-record_date')
+        return MedicalHistory.objects.filter(user_id=user_id).order_by('-record_date')
 
 # Upload Medical Record (post scans) by admin
 class MedicalRecordUploadView(generics.CreateAPIView):
@@ -284,15 +285,93 @@ class MedicalRecordUploadView(generics.CreateAPIView):
     permission_classes = [IsAdmin]
 
     def perform_create(self, serializer):
-        user = self.request.user
+        user_id = self.request.data.get("user")  # Extract patient ID from request
+        image = self.request.FILES.get("scan")  # Extract image from request
+        if not image:
+            raise serializers.ValidationError({"error": "Image file is required."})
+        if image.content_type not in ['image/jpeg', 'image/png']:
+            raise serializers.ValidationError({"error": "Invalid image format. Only JPEG and PNG are allowed."})
+        if not user_id:
+            raise serializers.ValidationError({"error": "User (Patient) ID is required."})
 
-        # Get the latest appointment for the user
-        latest_appointment = Appointment.objects.filter(patient=user).order_by('-date').first()
+        try:
+            user = CustomUser.objects.get(id=user_id)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError({"error": "Patient not found."})
 
-        # Check if there's an appointment and if it's marked as completed
-        if latest_appointment and latest_appointment.status == 'completed':
-            # Proceed with saving the medical record
-            serializer.save()
+        latest_appointment = Appointment.objects.filter(
+            user=user, status='finished'
+        ).order_by('-appointment_date').first()
+
+        if latest_appointment and latest_appointment.status == 'finished':
+            latest_appointment.status = 'completed'
+            latest_appointment.save()
+            serializer.save(user=user, appointment=latest_appointment)
         else:
-            raise serializers.ValidationError({"error": "Patient must have a completed appointment before uploading a medical record."})
+            raise serializers.ValidationError({"error": "Patient must have a finished appointment before uploading a medical record."})
+        
+ # Upload AI Model
+class AIModelCreateView(generics.CreateAPIView):
+    queryset = AIModel.objects.all()
+    serializer_class = AIModelSerializer
+    permission_classes = [IsAdmin]
+
+    def perform_create(self, serializer):
+        model_file = self.request.FILES.get("model_file")
+        if not model_file:
+            raise serializers.ValidationError({"error": "Model file is required."})
+        if not model_file.name.endswith('.h5', '.keras') or model_file.content_type not in ['application/octet-stream', 'application/x-hdf']:
+            raise serializers.ValidationError({"error": "Invalid file type. Only .h5 model files are allowed."})
+        serializer.save()
+# View AI Models
+class AIModelListView(generics.ListAPIView):
+    queryset = AIModel.objects.all()
+    serializer_class = AIModelSerializer
+    permission_classes = [IsAdmin]
+
+# Retrieve, Update, and Delete AI Model by Admin
+class AIModelDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = AIModel.objects.all()
+    serializer_class = AIModelSerializer
+    permission_classes = [IsAdmin]
+
+# View Deployed AI Models
+class DeployedAIModelView(generics.ListAPIView):
+    queryset = AIModel.objects.filter(status=AIModelStatus.DEPLOYED)
+    serializer_class = AIModelSerializer
+    permission_classes = [IsAuthenticated, IsUser | IsPatient]
+
+# AI Inference View for users uploading their own scans
+class AiInferenceView(generics.CreateAPIView):
+    serializer_class = MedicalHistorySerializer
+    permission_classes = [IsAuthenticated, IsUser | IsPatient]
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.ai_tries <= 0:
+            raise serializers.ValidationError({"error": "You have no AI tries left."})
+
+        scan = self.request.FILES.get("scan")
+        model_id = self.request.data.get("model_id")  
+
+        if not scan:
+            raise serializers.ValidationError({"error": "Scan file is required."})
+        if scan.content_type not in ['image/jpeg', 'image/png']:
+            raise serializers.ValidationError({"error": "Invalid image format. Only JPEG and PNG are allowed."})
+        if not model_id:
+            raise serializers.ValidationError({"error": "Model ID is required."})
+
+        # Retrieve the specified model
+        ai_model = AIModel.objects.filter(id=model_id, status=AIModelStatus.DEPLOYED).first()
+        if not ai_model:
+            raise serializers.ValidationError({"error": "No deployed AI model found with the provided ID."})
+
+        # Perform inference
+        result, confidence = ai_infer(ai_model.model_file.path, scan)
+
+        # Save the medical history record with AI interpretation
+        serializer.save(user=user, scan=scan, ai_interpretation=f'{result}, confidence= {confidence:.2f}%')
+        
+        user.ai_tries -= 1
+        user.save()
 
