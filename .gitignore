@@ -7,3 +7,4 @@ healthapp/migrations/__pycache__/*.pyc
 healthapp/migrations/0001_initial.py
 scans/*.jpg
 scans/*.png
+.gitignore
