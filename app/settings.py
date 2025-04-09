@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import environ
+from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -221,3 +223,13 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+
+#CHARGILY SETTINGS
+env = environ.Env()
+BASE_DIR = Path(__file__).resolve().parent.parent
+environ.Env.read_env(BASE_DIR / ".env")
+
+CHARGILY_KEY = env("CHARGILY_KEY")
+CHARGILY_SECRET = env("CHARGILY_SECRET")
+CHARGILY_URL = "https://pay.chargily.net/test/api/v2/"

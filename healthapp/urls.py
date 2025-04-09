@@ -17,7 +17,7 @@ urlpatterns = [
     path('admin/appointments/<int:pk>/', views.AppointmentEditView.as_view(), name='appointment-detail-admin'),
     path('admin/appointments/status/<str:status>/', views.AppointmentsStatusView.as_view(), name='appointment-by-status-admin'),
     path('admin/premium/', views.PremiumSubscriptionView.as_view(), name='premium-subscription-list'),
-    path('admin/premium/list', views.PremiumSubscriptionListView.as_view(), name='premium-subscription-detail'),
+    path('admin/premium/list/', views.PremiumSubscriptionListView.as_view(), name='premium-subscription-detail'),
     path('admin/premium/<int:pk>/revoke/', views.RevokePremiumView.as_view(), name='revoke-premium-subscription'),
     path('admin/coupons/create/', views.CouponCreateView.as_view(), name='coupon-list-create'),
     path('admin/coupons/', views.CouponListView.as_view(), name='coupon-list'),
@@ -42,8 +42,8 @@ urlpatterns = [
     path('users/redeem/', views.RedeemCouponView.as_view(), name='redeem-coupon'),
     path('users/history/', views.MedicalHistoryView.as_view(), name='medical-history'),
     path('users/ai/', views.DeployedAIModelView.as_view(), name='view-ai-models-user'),
-    path('users/ai/infer', views.AiInferenceView.as_view(), name='ai-inference'),
-    path('users/history/infer', views.AiInferenceHView.as_view(), name='ai-inference-from-history'),
+    path('users/ai/infer/', views.AiInferenceView.as_view(), name='ai-inference'),
+    path('users/history/infer/', views.AiInferenceHView.as_view(), name='ai-inference-from-history'),
     #untested
     path('users/ticket/create/', views.TicketCreateView.as_view(), name='ticket-create'),
 ]
