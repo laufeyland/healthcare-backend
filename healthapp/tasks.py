@@ -1,14 +1,15 @@
-from celery import shared_task, uuid
+from celery import shared_task
 from django.utils.timezone import now, timedelta
 from .models import *
 import random
 import string
 from healthapp.models import Coupon
-import random
-import string
-def generate_coupon_code(length=6):
-    """Generate a random alphanumeric coupon code of the given length."""
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+import requests
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+import json
+
+FASTAPI_URL = "http://127.0.0.1:8001/predict"
 
 @shared_task
 def remove_expired_premium_users():
@@ -49,3 +50,46 @@ def check_and_generate_coupons():
         return "Coupons checked and updated"
     except Exception as e:
         return f"Error: {str(e)}"
+
+@shared_task
+def send_to_fastapi(model_path, image_path):
+    """Send an image to FastAPI for inference"""
+    with open(image_path, "rb") as file:
+        response = requests.post(
+    FASTAPI_URL,
+    params={"model_path": model_path},
+    files={"file": file}
+)
+    try:
+        result = response.json()
+    except ValueError:
+        return {"error": "Invalid response from inference API."}
+    return result
+
+@shared_task
+def notify_user_task(user_id, message):
+    try:
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                "type": "send_notification",
+                "data": {
+                    "message": message
+                }
+            }
+        )
+    except Exception as e:
+        # Optional logging or retries
+        print(f"[Celery] Failed to send WebSocket message to user {user_id}: {e}")
+
+@shared_task
+def notify_user_test(username, message):
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        "notifications",
+        {
+            "type": "send_notification",
+            "message": f"{username}: {message}"
+        }
+    )

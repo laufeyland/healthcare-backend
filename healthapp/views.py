@@ -2,13 +2,18 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework import status, generics
+from rest_framework.views import APIView
 from .models import *
 from .serializers import *
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.utils.timezone import now
+from django.utils.timezone import now, make_aware, is_naive
 from django.db import transaction
 from .permissions import *
-from .ai_inference import ai_infer
+from .tasks import send_to_fastapi
+from datetime import datetime
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from .tasks import notify_user_task
 
 # Create your views here.
 
@@ -50,20 +55,40 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return Appointment.objects.filter(user=self.request.user).order_by('appointment_date')
-
     def perform_create(self, serializer):
         user = self.request.user
-
+        appointment_date_str = self.request.data.get("appointment_date")
+        if not appointment_date_str:
+            raise serializers.ValidationError({"error": "Appointment date is required."})
+        
+        try:
+            appointment_date = datetime.fromisoformat(appointment_date_str)
+        except ValueError:
+            raise serializers.ValidationError({"error": "Invalid appointment date format. Use ISO 8601 format."})
+        if is_naive(appointment_date):
+            appointment_date = make_aware(appointment_date)
+        appt_same_date = Appointment.objects.filter(appointment_date=appointment_date).first()
+        if appt_same_date and appointment_date == appt_same_date.appointment_date and appt_same_date.status in ['pending', 'confirmed']:
+            raise serializers.ValidationError({"error": "Appointment date already reserved."})
+        if appointment_date <= now():
+            raise serializers.ValidationError({"error": "Appointment date must be in the future."})
+        if appointment_date > now() + timedelta(days=30):
+            raise serializers.ValidationError({"error": "Appointment date must be within the next month."})
+        if appointment_date.weekday() in [4, 5]:  
+            raise serializers.ValidationError({"error": "Appointments cannot be made on Friday or Saturday."})
+        if appointment_date.hour < 7 or appointment_date.hour > 17:
+            raise serializers.ValidationError({"error": "Appointments can only be made between 7 AM and 5 PM."})
+        if appointment_date.minute % 30 != 0:
+            raise serializers.ValidationError({"error": "Appointments can only be made in 30-minute intervals."})
+        
         # Using a transaction to lock rows and prevent race conditions
         with transaction.atomic():
-            existing_appointments = Appointment.objects.filter(
+            
+            if Appointment.objects.filter(
                 user_id=self.request.user.id,
                 appointment_date__gte=now(),
-                status__in=['Pending', 'Confirmed']
-            )
-            if existing_appointments.exists():
+                status__in=['pending', 'confirmed']
+            ).exists():
                 raise serializers.ValidationError(
                     {"error": "You already have a pending or confirmed appointment."}
                 )
@@ -85,6 +110,7 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Appointment.objects.filter(user=self.request.user)
     def update(self, request, *args, **kwargs):
         appointment = self.get_object()
+        request.data.pop('status', None)  # Remove status from request data
         if appointment.status != "pending":  
             return Response(
                 {"detail": "You can only edit pending appointments."},
@@ -95,21 +121,54 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
                 {"detail": "You can only edit appointments more than a week in the future."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        appointment_date_str = request.data.get("appointment_date")
+        if not appointment_date_str:
+            raise serializers.ValidationError({"error": "Appointment date is required."})
+
+        try:
+            appointment_date = datetime.fromisoformat(appointment_date_str)
+        except ValueError:
+            raise serializers.ValidationError({"error": "Invalid appointment date format. Use ISO 8601 format."})
+
+        if is_naive(appointment_date):
+            appointment_date = make_aware(appointment_date)
+
+        # Check if that date/time is already booked
+        conflicting_appt = Appointment.objects.filter(
+            appointment_date=appointment_date,
+            status__in=["pending", "confirmed"]
+        ).exclude(id=appointment.id).first()
+
+        if conflicting_appt:
+            raise serializers.ValidationError({"error": "Appointment date already reserved."})
+
+        if appointment_date <= now():
+            raise serializers.ValidationError({"error": "Appointment date must be in the future."})
+
+        if appointment_date > now() + timedelta(days=30):
+            raise serializers.ValidationError({"error": "Appointment date must be within the next month."})
+
+        if appointment_date.weekday() in [4, 5]:
+            raise serializers.ValidationError({"error": "Appointments cannot be made on Friday or Saturday."})
+
+        if appointment_date.hour < 7 or appointment_date.hour > 17:
+            raise serializers.ValidationError({"error": "Appointments can only be made between 7 AM and 5 PM."})
+
+        if appointment_date.minute % 30 != 0:
+            raise serializers.ValidationError({"error": "Appointments can only be made in 30-minute intervals."})
+
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         appointment = self.get_object()
-        if appointment.status != "pending":  
+        if appointment.status not in ['pending', 'confirmed']:  
             return Response(
-                {"detail": "You can only cancel pending appointments."},
+                {"detail": "You can only cancel pending or confirmed appointments."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        if appointment.appointment_date <= now() + timedelta(weeks=1):
-            return Response(
-                {"detail": "You can only delete appointments more than a week in the future."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        return super().destroy(request, *args, **kwargs)
+        appointment.status = AppointmentStatus.CANCELLED
+        appointment.save()
+        
     
     # List Appointments for Admin
 class AppointmentsView(generics.ListAPIView):
@@ -126,7 +185,7 @@ class AppointmentEditView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         appointment = serializer.save()
 
-        if appointment.status == 'completed':  
+        if appointment.status == 'finished':  
             user = appointment.user  
             if user.role not in ['patient', 'admin']:
                 user.role = 'patient'
@@ -352,7 +411,7 @@ class AiInferenceView(generics.CreateAPIView):
             raise serializers.ValidationError({"error": "You have no AI tries left."})
 
         scan = self.request.FILES.get("scan")
-        model_id = self.request.data.get("model_id")  
+        model_id = self.request.data.get("model_id")
 
         if not scan:
             raise serializers.ValidationError({"error": "Scan file is required."})
@@ -361,17 +420,140 @@ class AiInferenceView(generics.CreateAPIView):
         if not model_id:
             raise serializers.ValidationError({"error": "Model ID is required."})
 
-        # Retrieve the specified model
+        # Retrieve AI model
         ai_model = AIModel.objects.filter(id=model_id, status=AIModelStatus.DEPLOYED).first()
         if not ai_model:
             raise serializers.ValidationError({"error": "No deployed AI model found with the provided ID."})
-
-        # Perform inference
-        result, confidence = ai_infer(ai_model.model_file.path, scan)
-
-        # Save the medical history record with AI interpretation
-        serializer.save(user=user, scan=scan, ai_interpretation=f'{result}, confidence= {confidence:.2f}%')
         
+        history = serializer.save(user=user, scan=scan, ai_interpretation="Processing...")
+        image_path = history.scan.path
+        task = send_to_fastapi.delay(ai_model.model_file.path, image_path)
+        if not task:
+            raise serializers.ValidationError({"error": "Failed to send image for inference."})
+        # Retrieve the response from the task
+        result = task.get(timeout=30)  # Wait for up to 30 seconds for the task to complete
+        if result.get("error"):
+            raise serializers.ValidationError({"error": result["error"]})
+        
+        diagnosis = result.get("predicted_label")
+        confidence = result.get("confidence")
+        if not diagnosis or confidence is None:
+            raise serializers.ValidationError({"error": "Invalid response from AI model."})
+        history.ai_interpretation = {
+            "diagnosis": diagnosis,
+            "confidence": confidence
+        }
+
+        history.task_id = task.id
+        history.save()
+
+
+        user.ai_tries -= 1
+        user.save()
+class AiInferenceHView(APIView):
+    permission_classes = [IsAuthenticated, IsUser | IsPatient]
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        if user.ai_tries <= 0:
+            return Response({"error": "You have no AI tries left."}, status=400)
+
+        medical_history_id = request.data.get("history_id")
+        model_id = request.data.get("model_id")
+
+        if not medical_history_id or not model_id:
+            return Response({"error": "history_id and model_id are required."}, status=400)
+
+        try:
+            history = MedicalHistory.objects.get(id=medical_history_id, user=user)
+        except MedicalHistory.DoesNotExist:
+            return Response({"error": "Medical record not found."}, status=404)
+
+        if not history.scan:
+            return Response({"error": "No scan found in the selected medical history."}, status=400)
+
+        ai_model = AIModel.objects.filter(id=model_id, status=AIModelStatus.DEPLOYED).first()
+        if not ai_model:
+            return Response({"error": "No deployed AI model found with the provided ID."}, status=400)
+
+        image_path = history.scan.path
+        task = send_to_fastapi.delay(ai_model.model_file.path, image_path)
+
+        result = task.get(timeout=30)
+        if result.get("error"):
+            return Response({"error": result["error"]}, status=500)
+
+        diagnosis = result.get("predicted_label")
+        confidence = result.get("confidence")
+        if not diagnosis or confidence is None:
+            return Response({"error": "Invalid response from AI model."}, status=500)
+
+        history.ai_interpretation = {
+            "diagnosis": diagnosis,
+            "confidence": confidence
+        }
+        history.task_id = task.id
+        history.save()
+
         user.ai_tries -= 1
         user.save()
 
+        return Response({
+            "message": "AI inference completed.",
+            "result": history.ai_interpretation
+        })
+
+
+# Tickets for Admin
+class TicketListView(generics.ListAPIView):
+    queryset = Ticket.objects.all()
+    serializer_class = TicketSerializer
+    permission_classes = [IsAdmin]
+
+# Retrieve, Update, and Delete Ticket by Admin
+class TicketDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Ticket.objects.all()
+    serializer_class = TicketSerializer
+    permission_classes = [IsAdmin]
+
+# Make a Ticket for users
+class TicketCreateView(generics.CreateAPIView):
+    serializer_class = TicketSerializer
+    permission_classes = [IsAuthenticated, IsUser | IsPatient]
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        Ticket_details = self.request.data.get("Ticket_details")
+        if not Ticket_details:
+            raise serializers.ValidationError({"error": "Ticket details are required."})
+        serializer.save(user=user)
+
+class NotificationListView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Notification.objects.filter(user=user).order_by('-created_at')
+
+class NotificationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Notification.objects.filter(user=user)
+
+    def perform_destroy(self, instance):
+        instance.delete()
+
+class PaymentCreateView(generics.CreateAPIView):
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        amount = self.request.data.get("amount")
+        if not amount:
+            raise serializers.ValidationError({"error": "Amount is required."})
+        serializer.save(user=user)

@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-kc*at0_1&4tbh(o*$457ic%g((2x6p1@sudj+ls#^ngxqixk4c
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.3','localhost']
+ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.3','localhost', 'http://0.0.0.0:8001']
 
 
 # Application definition
@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'django_celery_results',
     'django_celery_beat',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -76,7 +77,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'app.wsgi.application'
-
+ASGI_APPLICATION = 'app.asgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -151,8 +152,8 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SAMESITE = 'Lax'
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': False,
@@ -210,3 +211,13 @@ CELERY_TIMEZONE = 'Africa/Algiers'
 # CELERY BEAT SCHEDULER
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# REDIS CHANNEL SETTINGS
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}

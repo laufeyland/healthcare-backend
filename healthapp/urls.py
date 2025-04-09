@@ -29,7 +29,10 @@ urlpatterns = [
     path('admin/ai/', views.AIModelListView.as_view(), name='ai-model-list'),
     path('admin/ai/<int:pk>/', views.AIModelDetailView.as_view(), name='ai-model-detail'),
     path('admin/ai/upload/', views.AIModelCreateView.as_view(), name='upload-ai-model'),
-    
+    #untested
+    path('admin/ticket/', views.TicketListView.as_view(), name='ticket-list'),
+    path('admin/ticket/<int:pk>/', views.TicketDetailView.as_view(), name='ticket-detail'),
+
     # for authenticated user
     path('users/me/', views.AccountView.as_view(), name='account'),
     path('users/appointments/', views.AppointmentListView.as_view(), name='appointment-list'),
@@ -40,5 +43,7 @@ urlpatterns = [
     path('users/history/', views.MedicalHistoryView.as_view(), name='medical-history'),
     path('users/ai/', views.DeployedAIModelView.as_view(), name='view-ai-models-user'),
     path('users/ai/infer', views.AiInferenceView.as_view(), name='ai-inference'),
-
+    path('users/history/infer', views.AiInferenceHView.as_view(), name='ai-inference-from-history'),
+    #untested
+    path('users/ticket/create/', views.TicketCreateView.as_view(), name='ticket-create'),
 ]
