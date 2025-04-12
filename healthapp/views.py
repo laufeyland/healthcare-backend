@@ -19,7 +19,9 @@ from .tasks import notify_user_task
 
 # List and Create Users
 class UserListCreateView(generics.ListCreateAPIView):
-    queryset = CustomUser.objects.all()
+    def get(self, request, *args, **kwargs):
+        raise MethodNotAllowed("GET", detail="This action is not allowed.")
+    
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
 

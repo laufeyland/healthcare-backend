@@ -60,11 +60,9 @@ class Appointment(models.Model):
 def user_scan_upload_path(instance, filename):
     date_path = datetime.now().strftime('%Y/%m/%d')
     
-    # Generate a unique filename using a UUID to avoid collisions
+    # generate a unique filename using UUID
     ext = filename.split('.')[-1]
     filename = f"{uuid4().hex}.{ext}"
-    
-    # Organize by user ID and date
     return os.path.join("scans", str(instance.user.id), date_path, filename)
 
 # Medical History Model
