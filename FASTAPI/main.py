@@ -4,6 +4,8 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from tensorflow.keras.models import load_model
 from PIL import Image
 import io
+from pydantic import BaseModel
+from typing import List
 
 app = FastAPI()
 
@@ -50,3 +52,44 @@ async def ai_infer(model_path: str = Query(..., description="Path to the trained
     predicted_label = CLASS_LABELS[predicted_index] if predicted_index < len(CLASS_LABELS) else "Unknown"
 
     return {"predicted_label": predicted_label, "confidence": confidence}
+
+
+class Doctor(BaseModel):
+    first_name: str
+    last_name: str
+    specialty: str
+    wilaya: str
+    license_number: str
+    phone_number: str
+    address: str
+    email: str
+    external_id: str
+
+@app.get("/approved-doctors", response_model=List[Doctor])
+def get_approved_doctors():
+    # fake data
+    return [
+        {
+            "first_name": "Ali",
+            "last_name": "Benali",
+            "specialty": "Cardiology",
+            "wilaya": "25",
+            "license_number": "DOC-001",
+            "phone_number": "0555123456",
+            "address": "123 Rue Example",
+            "email": "ali.benali@example.com",
+            "external_id": "fastapi-001"
+        },
+        {
+            "first_name": "Nora",
+            "last_name": "Mekki",
+            "specialty": "Dermatology",
+            "wilaya": "16",
+            "license_number": "DOC-002",
+            "phone_number": "0555789456",
+            "address": "456 Boulevard Central",
+            "email": "nora.mekki@example.com",
+            "external_id": "fastapi-002"
+        }
+        
+    ]

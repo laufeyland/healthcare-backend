@@ -9,7 +9,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
 
-FASTAPI_URL = "http://127.0.0.1:8001/predict"
+FASTAPI_URL = "http://127.0.0.1:8001"
 
 @shared_task
 def remove_expired_premium_users():
@@ -56,10 +56,10 @@ def send_to_fastapi(model_path, image_path):
     """Send an image to FastAPI for inference"""
     with open(image_path, "rb") as file:
         response = requests.post(
-    FASTAPI_URL,
-    params={"model_path": model_path},
-    files={"file": file}
-)
+        f"{FASTAPI_URL}/infer",
+        params={"model_path": model_path},
+        files={"file": file}
+    )
     try:
         result = response.json()
     except ValueError:
@@ -93,3 +93,56 @@ def notify_user_test(username, message):
             "message": f"{username}: {message}"
         }
     )
+
+@shared_task
+def sync_appointed_doctors(user_id):
+    try:
+        response = requests.get(f"{FASTAPI_URL}/approved-doctors")  # adjust if needed
+        response.raise_for_status()
+        doctors = response.json()
+    
+        fastapi_ids = set()
+        for doc in doctors:
+            external_id = doc["external_id"]
+            fastapi_ids.add(external_id)
+
+            AppointedDoctor.objects.update_or_create(
+                external_id=external_id,
+                defaults={
+                    "first_name": doc["first_name"],
+                    "last_name": doc["last_name"],
+                    "specialty": doc["specialty"],
+                    "wilaya": doc["wilaya"],
+                    "license_number": doc["license_number"],
+                    "phone_number": doc["phone_number"],
+                    "address": doc["address"],
+                    "email": doc["email"],
+                },
+            )
+
+        # Delete doctors no longer present in FastAPI
+        AppointedDoctor.objects.exclude(external_id__in=fastapi_ids).delete()
+        channel_layer = get_channel_layer()
+
+        # Create a message to notify the admin
+        message = "Doctor sync completed successfully"
+    
+        # Send the notification to the WebSocket group for that user
+        channel_layer.group_send(
+        f'notifications_{user_id}',  # The group name based on user ID
+        {
+            'type': 'send_notification',
+            'message': message
+        })
+        return {"status": "success", "data": "sync completed"}
+    except Exception as e:
+        channel_layer = get_channel_layer()
+        # Create a message to notify the admin
+        message = f"Doctor sync failed: {str(e)}"
+        channel_layer.group_send(
+            f'notifications_{user_id}',  # The group name based on user ID
+            {
+                'type': 'send_notification',
+                'message': message
+            })
+        return {"error": str(e)}

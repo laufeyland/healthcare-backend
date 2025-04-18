@@ -139,6 +139,7 @@ AUTH_USER_MODEL = 'healthapp.CustomUser'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:8005",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CSRF_COOKIE_SECURE= True

@@ -9,7 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils.timezone import now, make_aware, is_naive
 from django.db import transaction
 from .permissions import *
-from .tasks import send_to_fastapi
+from .tasks import *
 from datetime import datetime
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -559,3 +559,41 @@ class PaymentCreateView(generics.CreateAPIView):
         if not amount:
             raise serializers.ValidationError({"error": "Amount is required."})
         serializer.save(user=user)
+
+class SyncAppointedDoctorsView(APIView):
+    serializer_class = AppointedDoctor
+    permission_classes = [IsAdmin]
+    def post(self, request, *args, **kwargs):
+        user_id = request.user.id
+        task = sync_appointed_doctors.delay(user_id)
+
+        try:
+            task.get(timeout=30)  
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+        if task.result.get("error"):
+            return Response({"error": task.result["error"]}, status=500)
+        
+
+        return Response({"message": "Sync started"}, status=status.HTTP_202_ACCEPTED)
+    
+class ChangePasswordView(generics.UpdateAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsUser | IsPatient]
+
+    def get_object(self):
+        return self.request.user
+
+    def perform_update(self, serializer):
+        user = self.get_object()
+        old_password = self.request.data.get("old_password")
+        new_password = self.request.data.get("new_password")
+        if not old_password:
+            raise serializers.ValidationError({"error": "Old password is required."})
+        if not new_password:
+            raise serializers.ValidationError({"error": "New password is required."})
+        if not user.check_password(old_password):
+            raise serializers.ValidationError({"error": "Old password is incorrect."})
+        user.set_password(new_password)
+        user.save()
+        return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)

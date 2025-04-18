@@ -32,11 +32,13 @@ urlpatterns = [
     #untested
     path('admin/ticket/', views.TicketListView.as_view(), name='ticket-list'),
     path('admin/ticket/<int:pk>/', views.TicketDetailView.as_view(), name='ticket-detail'),
+    path("admin/sync-doctors/", views.SyncAppointedDoctorsView.as_view(), name="sync-appointed-doctors"),
 
     # for authenticated user
     path('users/me/', views.AccountView.as_view(), name='account'),
+    path('users/me/password/', views.ChangePasswordView.as_view(), name='change-password'),
     path('users/appointments/', views.AppointmentListView.as_view(), name='appointment-list'),
-    path('users/appointments/create', views.AppointmentListCreateView.as_view(), name='appointment-list-create'),
+    path('users/appointments/create/', views.AppointmentListCreateView.as_view(), name='appointment-list-create'),
     path('users/appointments/<int:pk>/', views.AppointmentDetailView.as_view(), name='appointment-detail'),
     path('users/appointments/status/<str:status>/', views.AppointmentByStatusView.as_view(), name='appointment-by-status'),
     path('users/redeem/', views.RedeemCouponView.as_view(), name='redeem-coupon'),

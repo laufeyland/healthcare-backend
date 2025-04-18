@@ -7,8 +7,8 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'password', 'name', 'age', 'gender', 'role', 'settings', 'premium_status', 'ai_tries')
-        extra_kwargs = {'password': {'write_only': True}, 'email' : {'required': True, 'allow_blank': False}, 'username': {'required': True, 'allow_blank': False}, 'role': {'read_only': True}, 'premium_status': {'read_only': True},}
+        fields = ('id', 'username', 'email', 'password', 'first_name', 'last_name' , 'phone_number', 'age', 'gender', 'role', 'settings', 'pic', 'premium_status', 'ai_tries')
+        extra_kwargs = {'password': {'write_only': True}, 'email' : {'required': True, 'allow_blank': False}, 'username': {'required': True, 'allow_blank': False}, 'role': {'read_only': True}, 'premium_status': {'read_only': True}}
 
     def create(self, validated_data):
         validated_data.pop('ai_tries', None)
@@ -79,4 +79,19 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = ['id', 'user', 'amount', 'payment_date', 'payment_method', 'transaction_id', 'status']
         extra_kwargs = {'user': {'read_only': True}, 'transaction_id': {'read_only': True}, 'status': {'read_only': True}, 'payment_date': {'read_only': True}, 'amount': {'read_only': True}}
-        
+
+class AppointedDoctorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AppointedDoctor
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'specialty',
+            'wilaya',
+            'license_number',
+            'address',
+            'phone_number',  
+            'email',
+            'external_id',
+        ]
