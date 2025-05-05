@@ -10,9 +10,9 @@ from typing import List
 app = FastAPI()
 
 # Define class labels based on dataset
-CLASS_LABELS = ["Normal", "Pneumonia", "Lung Opacity", "Viral Pneumonia"]
+CLASS_LABELS = ["Pneumonia", "Normal", "Lung Opacity"]
 
-@app.post("/predict")
+@app.post("/infer")
 async def ai_infer(model_path: str = Query(..., description="Path to the trained Keras model"),
                    file: UploadFile = File(...)):
     """
@@ -36,8 +36,8 @@ async def ai_infer(model_path: str = Query(..., description="Path to the trained
 
     try:
         image = Image.open(io.BytesIO(await file.read()))
-        image = image.convert("RGB")  # Ensure it's in RGB format
-        image = image.resize((299, 299), Image.LANCZOS)  # Resize while maintaining quality
+        image = image.convert("L")  # "L" = grayscale (1 channel)
+        image = image.resize((160, 160), Image.LANCZOS)  # Resize while maintaining quality
         img_array = np.array(image) / 255.0  # Normalize pixel values
         img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
     except Exception as e:

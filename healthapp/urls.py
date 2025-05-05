@@ -18,21 +18,24 @@ urlpatterns = [
     path('admin/appointments/status/<str:status>/', views.AppointmentsStatusView.as_view(), name='appointment-by-status-admin'),
     path('admin/premium/', views.PremiumSubscriptionView.as_view(), name='premium-subscription-list'),
     path('admin/premium/list/', views.PremiumSubscriptionListView.as_view(), name='premium-subscription-detail'),
-    path('admin/premium/<int:pk>/revoke/', views.RevokePremiumView.as_view(), name='revoke-premium-subscription'),
+    path('admin/premium/<int:user_id>/revoke/', views.RevokePremiumView.as_view(), name='revoke-premium-subscription'),
     path('admin/coupons/create/', views.CouponCreateView.as_view(), name='coupon-list-create'),
     path('admin/coupons/', views.CouponListView.as_view(), name='coupon-list'),
     path('admin/coupons/<int:pk>/', views.CouponEditView.as_view(), name='coupon-detail'),
     path('admin/history/', views.MedicalHistoryAdminView.as_view(), name='medical-history-list-admin'),
     path('admin/history/<int:pk>/', views.MedicalHistoryDetailView.as_view(), name='medical-history-detail-admin'),
     path('admin/history/user/<int:pk>/', views.MedicalHistoryByUserView.as_view(), name='medical-history-filter-by-user'),
-    path('admin/history/upload', views.MedicalRecordUploadView.as_view(), name='upload-medical-history-record'),
+    path('admin/history/upload/', views.MedicalRecordUploadView.as_view(), name='upload-medical-history-record'),
     path('admin/ai/', views.AIModelListView.as_view(), name='ai-model-list'),
     path('admin/ai/<int:pk>/', views.AIModelDetailView.as_view(), name='ai-model-detail'),
     path('admin/ai/upload/', views.AIModelCreateView.as_view(), name='upload-ai-model'),
+    path('admin/ai/increase/', views.IncreaseAiTries.as_view(), name='increase-ai-tries'),
+    path("admin/sync-doctors/", views.SyncAppointedDoctorsView.as_view(), name="sync-appointed-doctors"),
+    path("admin/list-doctors/", views.AppointedDoctorListView.as_view(), name="appointed-doctors-list"),
     #untested
     path('admin/ticket/', views.TicketListView.as_view(), name='ticket-list'),
     path('admin/ticket/<int:pk>/', views.TicketDetailView.as_view(), name='ticket-detail'),
-    path("admin/sync-doctors/", views.SyncAppointedDoctorsView.as_view(), name="sync-appointed-doctors"),
+    
 
     # for authenticated user
     path('users/me/', views.AccountView.as_view(), name='account'),
@@ -48,4 +51,5 @@ urlpatterns = [
     path('users/history/infer/', views.AiInferenceHView.as_view(), name='ai-inference-from-history'),
     #untested
     path('users/ticket/create/', views.TicketCreateView.as_view(), name='ticket-create'),
+
 ]

@@ -25,6 +25,7 @@ class TicketStatus(models.TextChoices):
 
 class AIModelStatus(models.TextChoices):
     DEPLOYED = 'deployed'
+    VIP = 'vip'
     ARCHIVED = 'archived'
 
 class NotificationType(models.TextChoices):
@@ -129,6 +130,7 @@ class CustomUser(AbstractUser):
     pic = models.ImageField(upload_to=user_pic_upload_path, null=True)
     premium_status = models.BooleanField(default=False)
     ai_tries = models.PositiveIntegerField(default=0)
+    
     def __str__(self):
         return self.username
 
@@ -198,17 +200,6 @@ class Coupon(models.Model):
     def has_expired(self):
         return now() >= self.expires_at
 
-# Notification Model
-class Notification(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="notifications")
-    title = models.CharField(max_length=255)
-    message = models.TextField()
-    is_read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    notification_type = models.CharField(max_length=20, choices=NotificationType.choices, default=NotificationType.GENERAL)
-
-    class Meta:
-        ordering = ['-created_at']
 
 # Payment Model
 class Payment(models.Model):

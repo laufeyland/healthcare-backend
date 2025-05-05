@@ -69,11 +69,6 @@ class CouponSerializer(serializers.ModelSerializer):
         model = Coupon
         fields = ['id', 'coupon_code', 'valid_until', 'description']
 
-class NotificationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Notification
-        fields = ['id', 'title', 'message', 'is_read', 'created_at', 'notification_type']
-
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment

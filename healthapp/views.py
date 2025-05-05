@@ -14,6 +14,8 @@ from datetime import datetime
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .tasks import notify_user_task
+from django.http import JsonResponse
+
 
 # Create your views here.
 
@@ -38,11 +40,23 @@ class UserListView(generics.ListAPIView):
     serializer_class = UserSerializer
     permission_classes = [IsAdmin]
 
+
 # Retrieve, Update, and Delete a User by Admin
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAdmin]
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        if user.is_active == 0 :  
+            return Response(
+                {"detail": "User is already disabled."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        user.is_active = 0
+        user.save()
+        return Response({f"detail": "User {user.id} disabled"})
 
 # Retrieve and Update Account for Authenticated User
 class AccountView(generics.RetrieveUpdateDestroyAPIView):
@@ -248,19 +262,26 @@ class PremiumSubscriptionListView(generics.ListAPIView):
     
 # Revoke a user's premium status
 class RevokePremiumView(generics.DestroyAPIView):
-    queryset = PremiumSubscription.objects.all()
-    serializer_class = PremiumSubscriptionSerializer
     permission_classes = [IsAdmin]
 
+    def get_object(self):
+        # Extract user_id from URL kwargs
+        user_id = self.kwargs.get('user_id')
+
+        # Fetch the CustomUser instance using the user_id
+        return get_object_or_404(CustomUser, id=user_id)
+
     def perform_destroy(self, instance):
-        user = instance.user
-        user.premium_status = False
-        if user.ai_tries > 5:
-            user.ai_tries -= 5
-        else:
-            user.ai_tries = 0
-        user.save()
-        instance.delete()  
+        # Update the user's premium status
+        instance.premium_status = False
+        instance.ai_tries = max(instance.ai_tries - 5, 0)  # Reduce AI tries if above 5
+        instance.save()
+
+        # Now find the PremiumSubscription associated with the user_id and delete it
+        premium_subscription = get_object_or_404(PremiumSubscription, user=instance)
+        premium_subscription.delete()
+        return Response({"detail": "Premium subscription revoked."}, status=status.HTTP_204_NO_CONTENT)
+    
 
 # Create coupons by admin
 class CouponCreateView(generics.CreateAPIView):
@@ -381,7 +402,7 @@ class AIModelCreateView(generics.CreateAPIView):
         model_file = self.request.FILES.get("model_file")
         if not model_file:
             raise serializers.ValidationError({"error": "Model file is required."})
-        if not model_file.name.endswith('.h5', '.keras') or model_file.content_type not in ['application/octet-stream', 'application/x-hdf']:
+        if not model_file.name.endswith(('.h5', '.keras')) or model_file.content_type not in ['application/octet-stream', 'application/x-hdf']:
             raise serializers.ValidationError({"error": "Invalid file type. Only .h5 model files are allowed."})
         serializer.save()
 # View AI Models
@@ -530,24 +551,6 @@ class TicketCreateView(generics.CreateAPIView):
             raise serializers.ValidationError({"error": "Ticket details are required."})
         serializer.save(user=user)
 
-class NotificationListView(generics.ListAPIView):
-    serializer_class = NotificationSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        return Notification.objects.filter(user=user).order_by('-created_at')
-
-class NotificationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = NotificationSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        return Notification.objects.filter(user=user)
-
-    def perform_destroy(self, instance):
-        instance.delete()
 
 class PaymentCreateView(generics.CreateAPIView):
     serializer_class = PaymentSerializer
@@ -597,3 +600,37 @@ class ChangePasswordView(generics.UpdateAPIView):
         user.set_password(new_password)
         user.save()
         return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
+    
+def notify_user(user_id, message):
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f"user_{user_id}",
+        {
+            "type": "send_notification",
+            "message": message
+        }
+    )
+
+class IncreaseAiTries(generics.UpdateAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get_object(self):
+        return self.request.user
+
+    def perform_update(self, serializer):
+        set_tries = self.request.data.get("ai_tries")
+        if not set_tries:
+            raise serializers.ValidationError({"error" : "Must insert the number of AI tries"})
+        user = self.get_object()
+        user.ai_tries = set_tries
+        user.save()
+        return Response({"message": f"AI Tries set successfully to {user.ai_tries}"}, status=status.HTTP_200_OK)
+    
+class AppointedDoctorListView(generics.ListAPIView):
+    queryset = AppointedDoctor.objects.all()
+    serializer_class = AppointedDoctorSerializer
+    permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        return AppointedDoctor.objects.all().order_by('first_name')
