@@ -62,6 +62,7 @@ class Doctor(BaseModel):
     license_number: str
     phone_number: str
     address: str
+    status: str
     email: str
     external_id: str
 
@@ -76,6 +77,7 @@ def get_approved_doctors():
             "wilaya": "25",
             "license_number": "DOC-001",
             "phone_number": "0555123456",
+            "status": "active",
             "address": "123 Rue Example",
             "email": "ali.benali@example.com",
             "external_id": "fastapi-001"
@@ -87,9 +89,34 @@ def get_approved_doctors():
             "wilaya": "16",
             "license_number": "DOC-002",
             "phone_number": "0555789456",
+            "status": "inactive",
             "address": "456 Boulevard Central",
             "email": "nora.mekki@example.com",
             "external_id": "fastapi-002"
+        },
+        {
+            "first_name": "Abdeldjalil",
+            "last_name": "Bouchama",
+            "specialty": "Neurology",
+            "wilaya": "25",
+            "license_number": "DOC-003",
+            "phone_number": "0555789456",
+            "status": "inactive",
+            "address": "456 Boulevard Central",
+            "email": "nora.mekki@example.com",
+            "external_id": "fastapi-003"
+        },
+        {
+            "first_name": "Abdeldjalil2",
+            "last_name": "Bouchama2",
+            "specialty": "Neurology",
+            "wilaya": "25",
+            "license_number": "DOC-004",
+            "phone_number": "0555789456",
+            "status": "inactive",
+            "address": "456 Boulevard Central",
+            "email": "nora.mekki@example.com",
+            "external_id": "fastapi-004"
         }
         
     ]

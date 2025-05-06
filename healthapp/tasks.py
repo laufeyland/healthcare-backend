@@ -100,7 +100,8 @@ def sync_appointed_doctors(user_id):
         response = requests.get(f"{FASTAPI_URL}/approved-doctors")  # adjust if needed
         response.raise_for_status()
         doctors = response.json()
-    
+        print(doctors)
+        
         fastapi_ids = set()
         for doc in doctors:
             external_id = doc["external_id"]
@@ -117,6 +118,7 @@ def sync_appointed_doctors(user_id):
                     "phone_number": doc["phone_number"],
                     "address": doc["address"],
                     "email": doc["email"],
+                    "status": doc["status"],
                 },
             )
 

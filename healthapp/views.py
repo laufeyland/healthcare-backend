@@ -578,7 +578,7 @@ class SyncAppointedDoctorsView(APIView):
             return Response({"error": task.result["error"]}, status=500)
         
 
-        return Response({"message": "Sync started"}, status=status.HTTP_202_ACCEPTED)
+        return Response({"message": "Sync Complete"}, status=status.HTTP_202_ACCEPTED)
     
 class ChangePasswordView(generics.UpdateAPIView):
     serializer_class = UserSerializer
@@ -613,7 +613,7 @@ def notify_user(user_id, message):
 
 class IncreaseAiTries(generics.UpdateAPIView):
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self):
         return self.request.user
@@ -630,7 +630,7 @@ class IncreaseAiTries(generics.UpdateAPIView):
 class AppointedDoctorListView(generics.ListAPIView):
     queryset = AppointedDoctor.objects.all()
     serializer_class = AppointedDoctorSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return AppointedDoctor.objects.all().order_by('first_name')

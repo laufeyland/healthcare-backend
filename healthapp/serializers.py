@@ -78,15 +78,4 @@ class PaymentSerializer(serializers.ModelSerializer):
 class AppointedDoctorSerializer(serializers.ModelSerializer):
     class Meta:
         model = AppointedDoctor
-        fields = [
-            'id',
-            'first_name',
-            'last_name',
-            'specialty',
-            'wilaya',
-            'license_number',
-            'address',
-            'phone_number',  
-            'email',
-            'external_id',
-        ]
+        fields = '__all__'

@@ -10,6 +10,11 @@ class Role(models.TextChoices):
     PATIENT = 'patient'
     ADMIN = 'admin'
 
+class DoctorStatus(models.TextChoices):
+    ACTIVE = 'active'
+    INACTIVE = 'inactive'
+    SUSPENDED = 'suspended'
+
 class AppointmentStatus(models.TextChoices):
     PENDING = 'pending'
     CONFIRMED = 'confirmed'
@@ -224,6 +229,7 @@ class AppointedDoctor(models.Model):
         max_length=50, choices=WilayaEnum.choices, default=WilayaEnum.CONSTANTINE
     )
     license_number = models.CharField(max_length=100, unique=True)
+    status = models.CharField(max_length=20, choices=DoctorStatus.choices, default=DoctorStatus.ACTIVE, null=True)
     phone_number = models.CharField(max_length=20)
     address = models.CharField(max_length=255)
     email = models.EmailField()
