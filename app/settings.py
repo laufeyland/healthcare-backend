@@ -244,8 +244,9 @@ CHARGILY_URL = "https://pay.chargily.net/test/api/v2/"
 
 load_dotenv()
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'in-v3.mailjet.com'
+EMAIL_HOST = 'smtp.gmail.com'  # Example: Use Gmail's SMTP server
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('MAILJET_API_KEY')  
-EMAIL_HOST_PASSWORD = os.getenv('MAILJET_SECRET_KEY')  
+EMAIL_HOST_USER = env("EMAIL")  # Replace with your email
+EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD")  # Replace with your email password
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER

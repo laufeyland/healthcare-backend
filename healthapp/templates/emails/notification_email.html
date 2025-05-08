@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ subject }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #e8f0fe;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #2c3e50;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: auto;
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        }
+        .header {
+            background: linear-gradient(to right, #3a7bd5, #00d2ff);
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 26px;
+        }
+        .content {
+            padding: 25px 20px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .content p {
+            margin-bottom: 16px;
+        }
+        .content a.button {
+            display: inline-block;
+            background-color: #3a7bd5;
+            color: white !important;
+            padding: 12px 20px;
+            margin: 12px 8px 0 0;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+        .content a.button:hover {
+            background-color: #2e66c7;
+        }
+        .footer {
+            background-color: #f1f5fb;
+            text-align: center;
+            font-size: 13px;
+            color: #6b7280;
+            padding: 15px;
+        }
+
+        /* Responsive */
+        @media only screen and (max-width: 600px) {
+            .header h1 {
+                font-size: 22px;
+            }
+            .content {
+                padding: 20px 15px;
+                font-size: 15px;
+            }
+            .content a.button {
+                display: block;
+                width: 100%;
+                margin-bottom: 10px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1>{{ subject }}</h1>
+        </div>
+        <div class="content">
+            <p>Dear {{ user_name }},</p>
+            
+            {% if body_paragraphs %}
+                {% for paragraph in body_paragraphs %}
+                    <p>{{ paragraph }}</p>
+                {% endfor %}
+            {% else %}
+                <p>{{ body_content }}</p>
+            {% endif %}
+
+            {% if action_links %}
+                {% for link in action_links %}
+                    <a href="{{ link.url }}" class="button">{{ link.label }}</a>
+                {% endfor %}
+            {% endif %}
+
+            {% if closing_remark %}
+                <p>{{ closing_remark }}</p>
+            {% endif %}
+
+            <p><strong>The HealthCare Team</strong></p>
+        </div>
+        <div class="footer">
+            &copy; 2025 HealthCare. All rights reserved.
+        </div>
+    </div>
+</body>
+</html>

@@ -15,15 +15,32 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .tasks import notify_user_task
 from django.http import JsonResponse
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 
 
 # Create your views here.
 
-# Notify user when a new user is created
+# Email Preview Example
+def email_preview(request):
+    context = {
+        "subject": "Welcome to HealthCare!",
+        "user_name": "Sarah Connor",
+        "body_paragraphs": [
+            "We’re thrilled to have you on board.",
+            "You can now access your personal dashboard and manage your appointments easily.",
+            "If you need any help, our support team is just a click away."
+        ],
+        "action_links": [
+            {"url": "https://healthcare.example.com/dashboard", "label": "Go to Dashboard"},
+            {"url": "https://healthcare.example.com/support", "label": "Contact Support"}
+        ],
+        "closing_remark": "Thanks for joining us and stay healthy!"
+    }
+    return render(request, "emails/notification_email.html", context)
+
+# Example: Notify user when a new user is created
 class UserListCreateView(generics.ListCreateAPIView):
-    def get(self, request, *args, **kwargs):
-        raise MethodNotAllowed("GET", detail="This action is not allowed.")
-    
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
 
@@ -33,6 +50,26 @@ class UserListCreateView(generics.ListCreateAPIView):
             user = serializer.save()
             # Notify the user
             notify_user_task(user.id, "Your account has been successfully created.")
+            
+            # Send email notification
+            subject = "Welcome to HealthCare!"
+            template_name = "emails/notification_email.html"
+            context = {
+                "subject": subject,
+                "user_name": user.username,
+                "body_paragraphs": [
+                    "We’re thrilled to have you on board.",
+                    "You can now access your personal dashboard and manage your appointments easily.",
+                    "If you need any help, our support team is just a click away."
+                ],
+                "action_links": [
+                    {"url": "https://healthcare.example.com/dashboard", "label": "Go to Dashboard"},
+                    {"url": "https://healthcare.example.com/support", "label": "Contact Support"}
+                ],
+                "closing_remark": "Thanks for joining us and stay healthy!"
+            }
+            send_email_task.delay(subject, [user.email], template_name, context)
+            
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -60,6 +97,15 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         user.save()
         # Notify the admin
         notify_user_task(request.user.id, f"User {user.id} has been disabled.")
+        
+        # Send email notification to admin
+        subject = "User Disabled Notification"
+        context = {
+            "admin_username": request.user.username,
+            "message": f"User {user.username} has been disabled."
+        }
+        send_email_task.delay(subject, [request.user.email], context)
+        
         return Response({f"detail": "User {user.id} disabled"})
 
 # Retrieve and Update Account for Authenticated User
@@ -70,7 +116,7 @@ class AccountView(generics.RetrieveUpdateDestroyAPIView):
     def get_object(self):
         return self.request.user
 
-# Notify user when an appointment is created
+# Example: Notify user when an appointment is created
 class AppointmentListCreateView(generics.ListCreateAPIView):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
@@ -115,6 +161,24 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
             appointment = serializer.save(user=user)
             # Notify the user
             notify_user_task(user.id, f"Your appointment on {appointment.appointment_date} has been successfully created.")
+            
+            # Send email notification
+            subject = "Appointment Confirmation"
+            template_name = "emails/notification_email.html"
+            context = {
+                "subject": subject,
+                "user_name": user.username,
+                "body_paragraphs": [
+                    f"Your appointment has been successfully scheduled for {appointment.appointment_date}.",
+                    "Please make sure to arrive on time and bring any necessary documents."
+                ],
+                "action_links": [
+                    {"url": "https://healthcare.example.com/appointments", "label": "View Appointments"},
+                    {"url": "https://healthcare.example.com/support", "label": "Contact Support"}
+                ],
+                "closing_remark": "Thank you for choosing HealthCare!"
+            }
+            send_email_task.delay(subject, [user.email], template_name, context)
 
 # List Appointments for Authenticated User
 class AppointmentListView(generics.ListAPIView):
@@ -408,7 +472,18 @@ class MedicalRecordUploadView(generics.CreateAPIView):
         if latest_appointment and latest_appointment.status == 'finished':
             latest_appointment.status = 'completed'
             latest_appointment.save()
-            serializer.save(user=user, appointment=latest_appointment)
+            medical_record = serializer.save(user=user, appointment=latest_appointment)
+
+            # Notify the user
+            notify_user_task(user.id, "A new medical record has been uploaded to your account.")
+            
+            # Send email notification
+            subject = "New Medical Record Uploaded"
+            context = {
+                "username": user.username,
+                "message": "A new medical record has been uploaded to your account. Please log in to view it."
+            }
+            send_email_task.delay(subject, [user.email], context)
         else:
             raise serializers.ValidationError({"error": "Patient must have a finished appointment before uploading a medical record."})
         
@@ -473,6 +548,7 @@ class AiInferenceView(generics.CreateAPIView):
         task = send_to_fastapi.delay(ai_model.model_file.path, image_path)
         if not task:
             raise serializers.ValidationError({"error": "Failed to send image for inference."})
+        
         # Retrieve the response from the task
         result = task.get(timeout=30)  # Wait for up to 30 seconds for the task to complete
         if result.get("error"):
@@ -482,17 +558,39 @@ class AiInferenceView(generics.CreateAPIView):
         confidence = result.get("confidence")
         if not diagnosis or confidence is None:
             raise serializers.ValidationError({"error": "Invalid response from AI model."})
+        
         history.ai_interpretation = {
             "diagnosis": diagnosis,
             "confidence": confidence
         }
-
         history.task_id = task.id
         history.save()
 
-
         user.ai_tries -= 1
         user.save()
+
+        # Notify the user
+        notify_user_task(user.id, "Your AI inference results are ready.")
+        
+        # Send email notification
+        subject = "AI Inference Results Ready"
+        template_name = "emails/notification_email.html"
+        context = {
+            "subject": subject,
+            "user_name": user.username,
+            "body_paragraphs": [
+                f"Your AI inference results are ready.",
+                f"Diagnosis: {diagnosis}",
+                f"Confidence: {confidence:.2f}%"
+            ],
+            "action_links": [
+                {"url": "https://healthcare.example.com/ai-results", "label": "View Results"},
+                {"url": "https://healthcare.example.com/support", "label": "Contact Support"}
+            ],
+            "closing_remark": "Thank you for using HealthCare!"
+        }
+        send_email_task.delay(subject, [user.email], template_name, context)
+
 class AiInferenceHView(APIView):
     permission_classes = [IsAuthenticated, IsUser | IsPatient]
 
@@ -624,6 +722,24 @@ class ChangePasswordView(generics.UpdateAPIView):
         user.save()
         # Notify the user
         notify_user_task(user.id, "Your password has been successfully changed.")
+        
+        # Send email notification
+        subject = "Password Change Notification"
+        template_name = "emails/notification_email.html"  # Add the template name
+        context = {
+            "subject": subject,
+            "user_name": user.username,
+            "body_paragraphs": [
+                "Your password has been successfully changed.",
+                "If you did not make this change, please contact support immediately."
+            ],
+            "action_links": [
+                {"url": "https://healthcare.example.com/support", "label": "Contact Support"}
+            ],
+            "closing_remark": "Thank you for using HealthCare!"
+        }
+        send_email_task.delay(subject, [user.email], template_name, context)  # Pass the template_name argument
+        
         return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
     
 
@@ -661,3 +777,23 @@ class NotificationListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+
+
+from django.shortcuts import render
+
+def email_preview(request):
+    context = {
+        "subject": "Welcome to HealthCare!",
+        "user_name": "Sarah Connor",
+        "body_paragraphs": [
+            "We’re thrilled to have you on board.",
+            "You can now access your personal dashboard and manage your appointments easily.",
+            "If you need any help, our support team is just a click away."
+        ],
+        "action_links": [
+            {"url": "https://healthcare.example.com/dashboard", "label": "Go to Dashboard"},
+            {"url": "https://healthcare.example.com/support", "label": "Contact Support"}
+        ],
+        "closing_remark": "Thanks for joining us and stay healthy!"
+    }
+    return render(request, "emails/notification_email.html", context)

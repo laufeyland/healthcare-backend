@@ -52,5 +52,5 @@ urlpatterns = [
     path('users/notifications/', views.NotificationListView.as_view(), name='notification-list'),
     #untested
     path('users/ticket/create/', views.TicketCreateView.as_view(), name='ticket-create'),
-
+    path('email', views.email_preview, name='email'),
 ]
