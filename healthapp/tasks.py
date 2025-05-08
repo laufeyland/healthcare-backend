@@ -68,20 +68,19 @@ def send_to_fastapi(model_path, image_path):
 
 @shared_task
 def notify_user_task(user_id, message):
+    from healthapp.models import Notification  # Import the Notification model
+
     try:
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"user_{user_id}",
-            {
-                "type": "send_notification",
-                "data": {
-                    "message": message
-                }
-            }
+        # Create a new notification in the database
+        Notification.objects.create(
+            user_id=user_id,
+            message=message,
+            is_read=False,
+            created_at=now()
         )
+        return {"status": "success", "message": "Notification created successfully."}
     except Exception as e:
-        # Optional logging or retries
-        print(f"[Celery] Failed to send WebSocket message to user {user_id}: {e}")
+        return {"error": str(e)}
 
 @shared_task
 def notify_user_test(username, message):

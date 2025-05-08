@@ -234,3 +234,13 @@ class AppointedDoctor(models.Model):
     address = models.CharField(max_length=255)
     email = models.EmailField()
     external_id = models.CharField(max_length=100, unique=True)
+
+class Notification(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=20, choices=NotificationType.choices)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.notification_type} - {'Read' if self.is_read else 'Unread'}"

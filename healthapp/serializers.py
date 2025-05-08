@@ -79,3 +79,8 @@ class AppointedDoctorSerializer(serializers.ModelSerializer):
     class Meta:
         model = AppointedDoctor
         fields = '__all__'
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'

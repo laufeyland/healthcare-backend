@@ -19,7 +19,7 @@ from django.http import JsonResponse
 
 # Create your views here.
 
-# List and Create Users
+# Notify user when a new user is created
 class UserListCreateView(generics.ListCreateAPIView):
     def get(self, request, *args, **kwargs):
         raise MethodNotAllowed("GET", detail="This action is not allowed.")
@@ -30,7 +30,9 @@ class UserListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            user = serializer.save()
+            # Notify the user
+            notify_user_task(user.id, "Your account has been successfully created.")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -41,7 +43,7 @@ class UserListView(generics.ListAPIView):
     permission_classes = [IsAdmin]
 
 
-# Retrieve, Update, and Delete a User by Admin
+# Notify admin when a user is disabled
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
@@ -49,13 +51,15 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         user = self.get_object()
-        if user.is_active == 0 :  
+        if user.is_active == 0:
             return Response(
                 {"detail": "User is already disabled."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         user.is_active = 0
         user.save()
+        # Notify the admin
+        notify_user_task(request.user.id, f"User {user.id} has been disabled.")
         return Response({f"detail": "User {user.id} disabled"})
 
 # Retrieve and Update Account for Authenticated User
@@ -66,7 +70,7 @@ class AccountView(generics.RetrieveUpdateDestroyAPIView):
     def get_object(self):
         return self.request.user
 
-#Create Appointments for Authenticated User
+# Notify user when an appointment is created
 class AppointmentListCreateView(generics.ListCreateAPIView):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
@@ -108,7 +112,10 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
                 raise serializers.ValidationError(
                     {"error": "You already have a pending or confirmed appointment."}
                 )
-            serializer.save(user=user)
+            appointment = serializer.save(user=user)
+            # Notify the user
+            notify_user_task(user.id, f"Your appointment on {appointment.appointment_date} has been successfully created.")
+
 # List Appointments for Authenticated User
 class AppointmentListView(generics.ListAPIView):
     serializer_class = AppointmentSerializer
@@ -117,7 +124,7 @@ class AppointmentListView(generics.ListAPIView):
     def get_queryset(self):
         return Appointment.objects.filter(user=self.request.user).order_by('appointment_date')
 
-# Retrieve, Update, Delete a Specific Appointment by User
+# Notify user when an appointment is updated or canceled
 class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated, IsUser | IsPatient]
@@ -173,7 +180,10 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         if appointment_date.minute % 30 != 0:
             raise serializers.ValidationError({"error": "Appointments can only be made in 30-minute intervals."})
 
-        return super().update(request, *args, **kwargs)
+        response = super().update(request, *args, **kwargs)
+        # Notify the user
+        notify_user_task(self.request.user.id, f"Your appointment on {appointment.appointment_date} has been updated.")
+        return response
 
     def destroy(self, request, *args, **kwargs):
         appointment = self.get_object()
@@ -184,6 +194,9 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
             )
         appointment.status = AppointmentStatus.CANCELLED
         appointment.save()
+        # Notify the user
+        notify_user_task(self.request.user.id, f"Your appointment on {appointment.appointment_date} has been canceled.")
+        return Response({"detail": "Appointment canceled."}, status=status.HTTP_204_NO_CONTENT)
         
     
     # List Appointments for Admin
@@ -226,6 +239,7 @@ class AppointmentsStatusView(generics.ListAPIView):
         return Appointment.objects.filter(status=status)
 
 # make a user premium by admin   
+# Notify user when their premium subscription is created or revoked
 class PremiumSubscriptionView(generics.CreateAPIView):
     serializer_class = PremiumSubscriptionSerializer
     permission_classes = [IsAdmin]  
@@ -247,6 +261,8 @@ class PremiumSubscriptionView(generics.CreateAPIView):
         user.save()
 
         serializer.save(user=user)
+        # Notify the user
+        notify_user_task(user.id, "You have been upgraded to a premium subscription.")
 
     def destroy(self, request, *args, **kwargs):
         return Response(
@@ -280,6 +296,8 @@ class RevokePremiumView(generics.DestroyAPIView):
         # Now find the PremiumSubscription associated with the user_id and delete it
         premium_subscription = get_object_or_404(PremiumSubscription, user=instance)
         premium_subscription.delete()
+        # Notify the user
+        notify_user_task(instance.id, "Your premium subscription has been revoked.")
         return Response({"detail": "Premium subscription revoked."}, status=status.HTTP_204_NO_CONTENT)
     
 
@@ -301,7 +319,7 @@ class CouponEditView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CouponSerializer
     permission_classes = [IsAdmin]
 
-# Redeem Coupon
+# Notify user when a coupon is redeemed
 class RedeemCouponView(generics.CreateAPIView):
     serializer_class = PremiumSubscriptionSerializer
     permission_classes = [IsAuthenticated]  
@@ -325,6 +343,8 @@ class RedeemCouponView(generics.CreateAPIView):
         user.save()
         coupon.delete()
         serializer.save(user=user)
+        # Notify the user
+        notify_user_task(user.id, "You have successfully redeemed a coupon and upgraded to premium.")
 
     def destroy(self, request, *args, **kwargs):
         raise MethodNotAllowed("DELETE", detail="This action is not allowed.")
@@ -539,7 +559,7 @@ class TicketDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = TicketSerializer
     permission_classes = [IsAdmin]
 
-# Make a Ticket for users
+# Notify user when a ticket is created
 class TicketCreateView(generics.CreateAPIView):
     serializer_class = TicketSerializer
     permission_classes = [IsAuthenticated, IsUser | IsPatient]
@@ -549,7 +569,9 @@ class TicketCreateView(generics.CreateAPIView):
         Ticket_details = self.request.data.get("Ticket_details")
         if not Ticket_details:
             raise serializers.ValidationError({"error": "Ticket details are required."})
-        serializer.save(user=user)
+        ticket = serializer.save(user=user)
+        # Notify the user
+        notify_user_task(user.id, f"Your ticket with ID {ticket.id} has been successfully created.")
 
 
 class PaymentCreateView(generics.CreateAPIView):
@@ -580,6 +602,7 @@ class SyncAppointedDoctorsView(APIView):
 
         return Response({"message": "Sync Complete"}, status=status.HTTP_202_ACCEPTED)
     
+# Notify user when their password is changed
 class ChangePasswordView(generics.UpdateAPIView):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, IsUser | IsPatient]
@@ -599,18 +622,13 @@ class ChangePasswordView(generics.UpdateAPIView):
             raise serializers.ValidationError({"error": "Old password is incorrect."})
         user.set_password(new_password)
         user.save()
+        # Notify the user
+        notify_user_task(user.id, "Your password has been successfully changed.")
         return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
     
-def notify_user(user_id, message):
-    channel_layer = get_channel_layer()
-    async_to_sync(channel_layer.group_send)(
-        f"user_{user_id}",
-        {
-            "type": "send_notification",
-            "message": message
-        }
-    )
 
+
+# Notify user when AI tries are updated
 class IncreaseAiTries(generics.UpdateAPIView):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
@@ -625,6 +643,8 @@ class IncreaseAiTries(generics.UpdateAPIView):
         user = self.get_object()
         user.ai_tries = set_tries
         user.save()
+        # Notify the user
+        notify_user_task(user.id, f"Your AI tries have been updated to {user.ai_tries}.")
         return Response({"message": f"AI Tries set successfully to {user.ai_tries}"}, status=status.HTTP_200_OK)
     
 class AppointedDoctorListView(generics.ListAPIView):
@@ -634,3 +654,10 @@ class AppointedDoctorListView(generics.ListAPIView):
 
     def get_queryset(self):
         return AppointedDoctor.objects.all().order_by('first_name')
+
+class NotificationListView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
