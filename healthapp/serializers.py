@@ -50,9 +50,13 @@ class MedicalHistorySerializer(serializers.ModelSerializer):
 class TicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
-        fields = ['id', 'subject', 'description', 'reported_by', 'status', 'created_at']
-        extra_kwargs = {'reported_by': {'read_only': True}}
-    
+        fields = ['id', 'subject', 'description', 'reported_by', 'status', 'created_at', 'response']
+        extra_kwargs = {
+            'reported_by': {'read_only': True},
+            'created_at': {'read_only': True},
+            #'subject': {'read_only': True},  # Corrected syntax
+            #'description': {'read_only': True}  # Corrected syntax
+        }
 class AIModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = AIModel

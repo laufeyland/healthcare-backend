@@ -50,6 +50,7 @@ urlpatterns = [
     path('users/ai/infer/', views.AiInferenceView.as_view(), name='ai-inference'),
     path('users/history/infer/', views.AiInferenceHView.as_view(), name='ai-inference-from-history'),
     path('users/notifications/', views.NotificationListView.as_view(), name='notification-list'),
+    path('users/appointments/reserved/', views.ReservedAppointmentDatesView.as_view(), name='reserved-appointment-dates'),
     #untested
     path('users/ticket/create/', views.TicketCreateView.as_view(), name='ticket-create'),
     path('email', views.email_preview, name='email'),

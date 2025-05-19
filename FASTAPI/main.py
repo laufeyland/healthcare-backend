@@ -9,8 +9,8 @@ from typing import List
 
 app = FastAPI()
 
-# Define class labels based on dataset
-CLASS_LABELS = ["Pneumonia", "Normal", "Lung Opacity"]
+CLASS_LABELS_MULTICLASS = ["Pneumonia", "Normal", "Lung Opacity"]
+CLASS_LABELS_BINARY = ["Normal", "Pneumonia"]
 
 @app.post("/infer")
 async def ai_infer(model_path: str = Query(..., description="Path to the trained Keras model"),
@@ -36,20 +36,45 @@ async def ai_infer(model_path: str = Query(..., description="Path to the trained
 
     try:
         image = Image.open(io.BytesIO(await file.read()))
-        image = image.convert("L")  # "L" = grayscale (1 channel)
-        image = image.resize((160, 160), Image.LANCZOS)  # Resize while maintaining quality
-        img_array = np.array(image) / 255.0  # Normalize pixel values
-        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+
+        # Determine preprocessing strategy
+        if "binary_classifier" in model_path.lower():
+            # Preprocessing for binary classification model
+            image = image.convert("RGB")
+            image = image.resize((224, 224), Image.LANCZOS)
+            img_array = np.array(image) / 255.0
+            img_array = np.expand_dims(img_array, axis=0)
+            class_labels = CLASS_LABELS_BINARY
+
+        elif "chest_xray_classification_final_model" in model_path.lower():
+            # Preprocessing for multiclass model
+            image = image.convert("L")
+            image = image.resize((160, 160), Image.LANCZOS)
+            img_array = np.array(image) / 255.0
+            img_array = np.expand_dims(img_array, axis=-1)  # Add channel dimension
+            img_array = np.expand_dims(img_array, axis=0)
+            class_labels = CLASS_LABELS_MULTICLASS
+
+        else:
+            raise HTTPException(status_code=400, detail="Unknown model type for preprocessing.")
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing image: {str(e)}")
 
+    # Run prediction
     predictions = model.predict(img_array)
 
-   
-    predicted_index = int(np.argmax(predictions, axis=1)[0])
-    confidence = float(predictions[0][predicted_index] * 100)  
+    # Handle binary or multiclass prediction logic
+    if predictions.shape[1] == 1:
+        # Binary classification (single sigmoid output)
+        predicted_index = int(predictions[0][0] > 0.5)
+        confidence = float(predictions[0][0] * 100) if predicted_index == 1 else float((1 - predictions[0][0]) * 100)
+    else:
+        # Multi-class classification (softmax output)
+        predicted_index = int(np.argmax(predictions, axis=1)[0])
+        confidence = float(predictions[0][predicted_index] * 100)
 
-    predicted_label = CLASS_LABELS[predicted_index] if predicted_index < len(CLASS_LABELS) else "Unknown"
+    predicted_label = class_labels[predicted_index] if predicted_index < len(class_labels) else "Unknown"
 
     return {"predicted_label": predicted_label, "confidence": confidence}
 

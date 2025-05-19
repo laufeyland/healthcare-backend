@@ -479,11 +479,21 @@ class MedicalRecordUploadView(generics.CreateAPIView):
             
             # Send email notification
             subject = "New Medical Record Uploaded"
+            template_name = "emails/notification_email.html"
             context = {
-                "username": user.username,
-                "message": "A new medical record has been uploaded to your account. Please log in to view it."
+                "subject": subject,
+                "user_name": user.username,
+                "body_paragraphs": [
+                    "A new medical record has been uploaded to your account.",
+                    "Please log in to your dashboard to view your updated medical history."
+                ],
+                "action_links": [
+                    {"url": "https://healthcare.example.com/medical-history", "label": "View Medical History"},
+                    {"url": "https://healthcare.example.com/support", "label": "Contact Support"}
+                ],
+                "closing_remark": "Thank you for trusting HealthCare with your health!"
             }
-            send_email_task.delay(subject, [user.email], context)
+            send_email_task.delay(subject, [user.email], template_name, context)
         else:
             raise serializers.ValidationError({"error": "Patient must have a finished appointment before uploading a medical record."})
         
@@ -514,9 +524,18 @@ class AIModelDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 # View Deployed AI Models
 class DeployedAIModelView(generics.ListAPIView):
-    queryset = AIModel.objects.filter(status=AIModelStatus.DEPLOYED)
+    
     serializer_class = AIModelSerializer
-    permission_classes = [IsAuthenticated, IsUser | IsPatient]
+    permission_classes = [IsAuthenticated]
+    def get_queryset(self):
+        if self.request.user.role in ['user', 'patient']:
+            return AIModel.objects.filter(status=AIModelStatus.DEPLOYED).order_by('-created_at')
+        elif self.request.user.role == 'premium':
+            # Allow premium users to see both deployed and VIP models
+            return AIModel.objects.filter(status__in=[AIModelStatus.DEPLOYED, AIModelStatus.VIP]).order_by('-created_at')
+        else:
+            # For admin users, show all models
+            return AIModel.objects.all().order_by('-created_at')
 
 # AI Inference View for users uploading their own scans
 class AiInferenceView(generics.CreateAPIView):
@@ -645,17 +664,24 @@ class AiInferenceHView(APIView):
         })
 
 
-# Tickets for Admin
-class TicketListView(generics.ListAPIView):
-    queryset = Ticket.objects.all()
-    serializer_class = TicketSerializer
-    permission_classes = [IsAdmin]
-
 # Retrieve, Update, and Delete Ticket by Admin
 class TicketDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
     permission_classes = [IsAdmin]
+
+# Ticket list for User
+class TicketListView(generics.ListAPIView):
+    serializer_class = TicketSerializer
+    permission_classes = [IsAuthenticated]
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'admin':
+            return Ticket.objects.all()
+        elif user.role == 'patient':
+            return Ticket.objects.filter(reported_by=user)
+        else:
+            return Ticket.objects.none()
 
 # Notify user when a ticket is created
 class TicketCreateView(generics.CreateAPIView):
@@ -664,10 +690,13 @@ class TicketCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user
-        Ticket_details = self.request.data.get("Ticket_details")
+        subject = self.request.data.get("subject")
+        if not subject:
+            raise serializers.ValidationError({"error": "Subject is required."})
+        Ticket_details = self.request.data.get("description")
         if not Ticket_details:
             raise serializers.ValidationError({"error": "Ticket details are required."})
-        ticket = serializer.save(user=user)
+        ticket = serializer.save(reported_by=user)
         # Notify the user
         notify_user_task(user.id, f"Your ticket with ID {ticket.id} has been successfully created.")
 
@@ -797,3 +826,18 @@ def email_preview(request):
         "closing_remark": "Thanks for joining us and stay healthy!"
     }
     return render(request, "emails/notification_email.html", context)
+
+
+class ReservedAppointmentDatesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # Get all appointments with reserved statuses
+        reserved_appointments = Appointment.objects.filter(
+            status__in=['pending', 'confirmed']
+            ).values_list('appointment_date', flat=True)
+
+        # Convert datetimes to ISO 8601 strings
+        reserved_dates = [dt.isoformat() for dt in reserved_appointments]
+
+        return Response({"reserved_dates": reserved_dates})
